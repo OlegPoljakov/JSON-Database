@@ -1,58 +1,35 @@
 package server;
 
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.net.ServerSocket;
+import java.net.Socket;
 import java.util.Arrays;
 import java.util.Scanner;
 
 public class Main {
 
-    private static String[] intArray = new String[100];
+    private static  final int PORT = 23456;
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
 
-        Arrays.fill(intArray, "");
-        Scanner sc = new Scanner (System.in);
-        String command = "";
-        int numofcell = 0;
-        String text = "";
+        ServerSocket listener = new ServerSocket(PORT);
 
-        do {
-            System.out.print("> ");
-            command =  sc.next();
-            //numofcell = sc.nextInt() - 1;
-            //text = sc.nextLine();
+        System.out.println("Server started!");
+        Socket client = listener.accept();
 
-            switch (command) {
-                case("set"):
-                    numofcell = sc.nextInt() - 1;
-                    text = sc.nextLine();
-                    if (numofcell>=0 && numofcell<=99) {
-                        intArray[numofcell] = text;
-                        System.out.println("OK");
-                    }
-                    break;
-                case("get"):
-                    numofcell = sc.nextInt() - 1;
-                    if (numofcell>=0 && numofcell<=99 && !intArray[numofcell].isEmpty()) {
-                        System.out.println(intArray[numofcell]);
-                    }
-                    else{
-                        System.out.println("ERROR");
-                    }
-                    break;
-                case("delete"):
-                    numofcell = sc.nextInt() - 1;
-                    if (numofcell>=0 && numofcell<=99) {
-                        intArray[numofcell] = "";
-                        System.out.println("OK");
-                    }
-                    else {
-                        System.out.println("ERROR");
-                    }
-                    break;
-                default:
-                    break;
-            }
-        }
-        while (!command.equals("exit"));
+        DataInputStream input = new DataInputStream(client.getInputStream());
+        DataOutputStream output = new DataOutputStream(client.getOutputStream());
+
+        String msg = input.readUTF(); // reading a message
+        String numberinString = input.readUTF(); // reading a message
+
+        System.out.println("Received: " + msg + numberinString);
+
+        //msg = "A record # 12 was sent!";
+        output.writeUTF("A record # " + numberinString + " was sent!"); // resend it to the client
+        System.out.println("Sent: " + "A record # " + numberinString + " was sent!");
     }
 }
