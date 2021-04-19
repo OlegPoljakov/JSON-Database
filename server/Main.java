@@ -1,5 +1,7 @@
 package server;
 
+import com.beust.jcommander.JCommander;
+
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -11,25 +13,65 @@ import java.util.Scanner;
 
 public class Main {
 
-    private static  final int PORT = 23456;
+    private static final int PORT = 23456;
+    private static String[] intArray = new String[1000];
 
     public static void main(String[] args) throws IOException {
 
+        Arrays.fill(intArray, "");
+
+        String type = "";
+        int index = 0;
+        String text = "";
+
         ServerSocket listener = new ServerSocket(PORT);
-
         System.out.println("Server started!");
-        Socket client = listener.accept();
 
-        DataInputStream input = new DataInputStream(client.getInputStream());
-        DataOutputStream output = new DataOutputStream(client.getOutputStream());
+        outerloop:
+        while (!type.equals("exit")) {
 
-        String msg = input.readUTF(); // reading a message
-        String numberinString = input.readUTF(); // reading a message
+            Socket client = listener.accept();
 
-        System.out.println("Received: " + msg + numberinString);
+            DataInputStream input = new DataInputStream(client.getInputStream());
+            DataOutputStream output = new DataOutputStream(client.getOutputStream());
 
-        //msg = "A record # 12 was sent!";
-        output.writeUTF("A record # " + numberinString + " was sent!"); // resend it to the client
-        System.out.println("Sent: " + "A record # " + numberinString + " was sent!");
+            type = input.readUTF();
+            switch (type) {
+                case ("set"):
+                    index = Integer.parseInt(input.readUTF()) - 1;
+                    text = input.readUTF();
+                    if (index >= 0 && index <= 999) {
+                        intArray[index] = text;
+                        output.writeUTF("OK");
+                    }
+                    break;
+
+                case ("get"):
+                    index = Integer.parseInt(input.readUTF()) - 1;
+                    if (index >= 0 && index <= 99 && !intArray[index].isEmpty()) {
+                        output.writeUTF(intArray[index]);
+                    } else {
+                        output.writeUTF("ERROR");
+                    }
+                    break;
+
+                case ("delete"):
+                    index = Integer.parseInt(input.readUTF()) - 1;
+                    if (index >= 0 && index <= 99) {
+                        intArray[index] = "";
+                        output.writeUTF("OK");
+                    } else {
+                        output.writeUTF("ERROR");
+                    }
+                    break;
+
+                case("exit"):
+                    output.writeUTF("OK");
+                    break outerloop;
+                default:
+                    break;
+            }
+        }
+        listener.close();
     }
 }
