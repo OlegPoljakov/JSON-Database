@@ -48,7 +48,7 @@ public class Main {
 
                 case ("get"):
                     index = Integer.parseInt(input.readUTF()) - 1;
-                    if (index >= 0 && index <= 99 && !intArray[index].isEmpty()) {
+                    if (index >= 0 && index <= 999 && !intArray[index].isEmpty()) {
                         output.writeUTF(intArray[index]);
                     } else {
                         output.writeUTF("ERROR");
@@ -57,7 +57,7 @@ public class Main {
 
                 case ("delete"):
                     index = Integer.parseInt(input.readUTF()) - 1;
-                    if (index >= 0 && index <= 99) {
+                    if (index >= 0 && index <= 999) {
                         intArray[index] = "";
                         output.writeUTF("OK");
                     } else {
