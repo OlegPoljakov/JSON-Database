@@ -2,11 +2,14 @@ package client;
 
 import com.beust.jcommander.JCommander;
 import com.beust.jcommander.Parameter;
+import com.google.gson.Gson;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
+import java.util.HashMap;
+import java.util.Map;
 
 public class Main {
 
@@ -16,10 +19,10 @@ public class Main {
     @Parameter(names = "-t", description = "Type of request")
     private String type;
 
-    @Parameter(names = "-i", description = "Index of item in db")
-    private int index;
+    @Parameter(names = "-k", description = "Key")
+    private String key;
 
-    @Parameter(names = "-m", description = "Value to be saved")
+    @Parameter(names = "-v", description = "Value to be saved")
     private String value;
 
     public static void main(String[] args) throws IOException {
@@ -44,34 +47,57 @@ public class Main {
 
         String receivedMsg = "";
 
+        Map<String, String> setcommand = new HashMap<>();
+        String outputjson= "";
+        Gson gson = new Gson();
+
         switch (type) {
             case("set"):
-                output.writeUTF("set");
-                output.writeUTF(Integer.toString(index));
-                output.writeUTF(value);
-                System.out.println("Sent: " + type + " " + index + " " + value);
+                setcommand.put("type", "set");
+                //setcommand.put("key", Integer.toString(index));
+                setcommand.put("key", key);
+                setcommand.put("value", value);
+
+                outputjson = gson.toJson(setcommand);
+                System.out.println("Sent: " + outputjson);
+                output.writeUTF(outputjson);
+
                 receivedMsg = input.readUTF();
                 System.out.println("Received: " + receivedMsg);
                 break;
 
             case("get"):
-                output.writeUTF("get");
-                output.writeUTF(Integer.toString(index));
-                System.out.println("Sent: " + type + " " + index);
+                setcommand.put("type", "get");
+                //setcommand.put("key", Integer.toString(index));
+                setcommand.put("key", key);
+
+                outputjson = gson.toJson(setcommand);
+                System.out.println("Sent: " + outputjson);
+                output.writeUTF(outputjson);
+
                 receivedMsg = input.readUTF();
                 System.out.println("Received: " + receivedMsg);
                 break;
 
             case("delete"):
-                output.writeUTF("delete");
-                output.writeUTF(Integer.toString(index));
-                System.out.println("Sent: " + type + " " + index);
+                setcommand.put("type", "delete");
+                //setcommand.put("key", Integer.toString(index));
+                setcommand.put("key", key);
+
+                outputjson = gson.toJson(setcommand);
+                System.out.println("Sent: " + outputjson);
+                output.writeUTF(outputjson);
+
                 receivedMsg = input.readUTF();
                 System.out.println("Received: " + receivedMsg);
                 break;
 
             case ("exit"):
-                System.out.println("Sent: " + type);
+                setcommand.put("type", "exit");
+                outputjson = gson.toJson(setcommand);
+                System.out.println("Sent: " + outputjson);
+                output.writeUTF(outputjson);
+
                 output.writeUTF("exit");
                 receivedMsg = input.readUTF();
                 System.out.println("Received: " + receivedMsg);
