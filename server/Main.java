@@ -1,116 +1,79 @@
 package server;
 
-import com.beust.jcommander.JCommander;
 import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
-import org.json.JSONException;
-import org.json.JSONObject;
+import server.cli.CommandExecutor;
+import server.cli.commands.DeleteCommand;
+import server.cli.commands.GetCommand;
+import server.cli.commands.SetCommand;
+import server.cli.requests.Request;
+import server.cli.requests.Response;
+import server.exceptions.NoSuchRequestException;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.PrintWriter;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Scanner;
 
 public class Main {
 
-    private static final int PORT = 23456;
-    private static String[] intArray = new String[1000];
-    private static Map<String, String> DataBase = new HashMap<>();
+    private static final String ADDRESS = "127.0.0.1";
+    private static final int PORT = 8000;
 
-    public static void main(String[] args) throws IOException, JSONException {
+    public static void main(String[] args) throws IOException {
 
-        Arrays.fill(intArray, "");
+        //Design pattern here!
+        final CommandExecutor executor = new CommandExecutor();
 
-        String type = "";
-        String index = "";
-        String text = "";
-        String inputJson = "";
-        String outputjson= "";
-
-        Gson gson = new Gson();
-
-        ServerSocket listener = new ServerSocket(PORT);
+        ServerSocket server = new ServerSocket(PORT, 50, InetAddress.getByName(ADDRESS));
         System.out.println("Server started!");
 
+        while(true){
+            try(Socket socket = server.accept();
+                DataInputStream input = new DataInputStream(socket.getInputStream());
+                DataOutputStream output = new DataOutputStream(socket.getOutputStream()))
+            {
+                Request request =  new Gson().fromJson(input.readUTF(), Request.class);
+                Response response = new Response();
 
-        outerloop:
-        while (!type.equals("exit")) { //This might be changed
-
-            Socket client = listener.accept();
-
-            DataInputStream input = new DataInputStream(client.getInputStream());
-            DataOutputStream output = new DataOutputStream(client.getOutputStream());
-
-            inputJson = input.readUTF(); //Read client answer in json format string
-            JSONObject obj = new JSONObject(inputJson);
-            type = obj.getString("type");
-
-            switch (type) {
-                case ("set"):
-                    Map<String, String> setcommand = new HashMap<>();
-
-                    index = obj.getString("key");
-                    text = obj.getString("value");
-
-                    DataBase.put(index,text);
-
-                    setcommand.put("response", "OK");
-                    outputjson = gson.toJson(setcommand);
-                    output.writeUTF(outputjson);
-
-                    break;
-
-                case ("get"):
-                    index = obj.getString("key");
-                    Map<String, String> getcommand = new HashMap<>();
-                    if (DataBase.containsKey(index)) {
-                        getcommand.put("response", "OK");
-                        getcommand.put("value", DataBase.get(index));
-                        outputjson = gson.toJson(getcommand);
-                        output.writeUTF(outputjson);
-                    } else {
-                        getcommand.put("response", "ERROR");
-                        getcommand.put("reason", "No such key");
-                        outputjson = gson.toJson(getcommand);
-                        output.writeUTF(outputjson);
+                try {
+                    switch (request.getType()) {
+                        case "get":
+                            GetCommand getCmd = new GetCommand(request.getKey());
+                            executor.executeCommand(getCmd);
+                            response.setValue(getCmd.getResult());
+                            break;
+                        case "set":
+                            SetCommand setCmd = new SetCommand(request.getKey(), request.getValue());
+                            executor.executeCommand(setCmd);
+                            break;
+                        case "delete":
+                            DeleteCommand deleteCmd = new DeleteCommand(request.getKey());
+                            executor.executeCommand(deleteCmd);
+                            break;
+                        case "exit":
+                            response.setResponse(Response.STATUS_OK);
+                            output.writeUTF(response.toJSON());
+                            socket.close();
+                            return;
+                        default:
+                            throw new NoSuchRequestException();
                     }
-                    break;
+                    response.setResponse(Response.STATUS_OK);
 
-                case ("delete"):
-                    index = obj.getString("key");
-                    Map<String, String> deletecommand = new HashMap<>();
-                    if (DataBase.containsKey(index)) {
-                        if (!DataBase.get(index).equals("")) {
-                            DataBase.remove(index);
-                            deletecommand.put("response", "OK");
-                        }
-                    } else {
-                        deletecommand.put("response", "ERROR");
-                        deletecommand.put("reason", "No such key");
-                    }
+                } catch (Exception e) {
+                    response.setResponse(Response.STATUS_ERROR);
+                    response.setReason(e.getMessage());
+                }
 
-                    outputjson = gson.toJson(deletecommand);
-                    output.writeUTF(outputjson);
-                    break;
+                output.writeUTF(response.toJSON());
 
-                case("exit"):
-                    Map<String, String> exitcommand = new HashMap<>();
-                    exitcommand.put("response", "OK");
-                    outputjson = gson.toJson(exitcommand);
-                    output.writeUTF(outputjson);
-                    break outerloop;
-                default:
-                    break;
             }
 
+            catch (Exception e) {
+                e.printStackTrace();
+            }
         }
-        listener.close();
     }
 }
