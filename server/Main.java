@@ -1,116 +1,297 @@
+/*
 package server;
 
-import com.beust.jcommander.JCommander;
 import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonParser;
-import org.json.JSONException;
-import org.json.JSONObject;
+import org.json.simple.JSONArray;
+import server.cli.CommandExecutor;
+import server.cli.commands.DeleteCommand;
+import server.cli.commands.GetCommand;
+import server.cli.commands.SetCommand;
+import server.cli.requests.Request;
+import server.cli.requests.Response;
+import server.exceptions.NoSuchRequestException;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.PrintWriter;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Scanner;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class Main {
 
-    private static final int PORT = 23456;
-    private static String[] intArray = new String[1000];
-    private static Map<String, String> DataBase = new HashMap<>();
+    private static final String ADDRESS = "127.0.0.1";
+    private static final int PORT = 8000;
 
-    public static void main(String[] args) throws IOException, JSONException {
+    public static void main(String[] args) throws IOException {
 
-        Arrays.fill(intArray, "");
-
-        String type = "";
-        String index = "";
-        String text = "";
-        String inputJson = "";
-        String outputjson= "";
-
-        Gson gson = new Gson();
-
-        ServerSocket listener = new ServerSocket(PORT);
+        ServerSocket server = new ServerSocket(PORT, 50, InetAddress.getByName(ADDRESS));
         System.out.println("Server started!");
+        JSONArray datalist = new JSONArray();
 
+        while (true)
+        {
+            Socket socket = null;
 
-        outerloop:
-        while (!type.equals("exit")) { //This might be changed
+            try{
+                socket = server.accept();
 
-            Socket client = listener.accept();
+                DataInputStream input = new DataInputStream(socket.getInputStream());
+                DataOutputStream output = new DataOutputStream(socket.getOutputStream());
 
-            DataInputStream input = new DataInputStream(client.getInputStream());
-            DataOutputStream output = new DataOutputStream(client.getOutputStream());
+                // create a new thread object
+                Thread t = new ClientHandler(socket, input, output, datalist);
 
-            inputJson = input.readUTF(); //Read client answer in json format string
-            JSONObject obj = new JSONObject(inputJson);
-            type = obj.getString("type");
-
-            switch (type) {
-                case ("set"):
-                    Map<String, String> setcommand = new HashMap<>();
-
-                    index = obj.getString("key");
-                    text = obj.getString("value");
-
-                    DataBase.put(index,text);
-
-                    setcommand.put("response", "OK");
-                    outputjson = gson.toJson(setcommand);
-                    output.writeUTF(outputjson);
-
-                    break;
-
-                case ("get"):
-                    index = obj.getString("key");
-                    Map<String, String> getcommand = new HashMap<>();
-                    if (DataBase.containsKey(index)) {
-                        getcommand.put("response", "OK");
-                        getcommand.put("value", DataBase.get(index));
-                        outputjson = gson.toJson(getcommand);
-                        output.writeUTF(outputjson);
-                    } else {
-                        getcommand.put("response", "ERROR");
-                        getcommand.put("reason", "No such key");
-                        outputjson = gson.toJson(getcommand);
-                        output.writeUTF(outputjson);
-                    }
-                    break;
-
-                case ("delete"):
-                    index = obj.getString("key");
-                    Map<String, String> deletecommand = new HashMap<>();
-                    if (DataBase.containsKey(index)) {
-                        if (!DataBase.get(index).equals("")) {
-                            DataBase.remove(index);
-                            deletecommand.put("response", "OK");
-                        }
-                    } else {
-                        deletecommand.put("response", "ERROR");
-                        deletecommand.put("reason", "No such key");
-                    }
-
-                    outputjson = gson.toJson(deletecommand);
-                    output.writeUTF(outputjson);
-                    break;
-
-                case("exit"):
-                    Map<String, String> exitcommand = new HashMap<>();
-                    exitcommand.put("response", "OK");
-                    outputjson = gson.toJson(exitcommand);
-                    output.writeUTF(outputjson);
-                    break outerloop;
-                default:
-                    break;
+                // Invoking the start() method
+                t.start();
             }
-
+            catch (Exception e) {
+                socket.close();
+                e.printStackTrace();
+            }
         }
-        listener.close();
+    }
+}
+
+class ClientHandler extends Thread {
+
+    final DataInputStream input;
+    final DataOutputStream output;
+    final Socket socket;
+    private JSONArray datalist;
+
+    // Constructor
+    public ClientHandler(Socket socket, DataInputStream input, DataOutputStream output, JSONArray datalist)
+    {
+        this.socket = socket;
+        this.input = input;
+        this.output = output;
+        this.datalist = datalist;
+    }
+
+
+    @Override
+    public void run()
+    {
+        final CommandExecutor executor = new CommandExecutor();
+        ReadWriteLock lock = new ReentrantReadWriteLock();
+        Response response = new Response();
+
+        outerloop: while(true){
+
+            try {
+
+                Request request = new Gson().fromJson(input.readUTF(), Request.class);
+
+                try {
+                    switch (request.getType()) {
+                        case "get":
+                            lock.readLock().lock();
+                            GetCommand getCmd = new GetCommand(request.getKey());
+                            executor.executeCommand(getCmd);
+                            response.setValue(getCmd.getResult());
+                            lock.readLock().unlock();
+                            break;
+                        case "set":
+                            lock.writeLock().lock();
+                            SetCommand setCmd = new SetCommand(request.getKey(), request.getValue(), datalist);
+                            executor.executeCommand(setCmd);
+                            lock.writeLock().unlock();
+                            break;
+                        case "delete":
+                            lock.writeLock().lock();
+                            DeleteCommand deleteCmd = new DeleteCommand(request.getKey());
+                            executor.executeCommand(deleteCmd);
+                            lock.writeLock().unlock();
+                            break;
+                        case "exit":
+                            response.setResponse(Response.STATUS_OK);
+                            output.writeUTF(response.toJSON());
+                            socket.close();
+                            break outerloop;
+                            //return;
+                        default:
+                            throw new NoSuchRequestException();
+                    }
+                    response.setResponse(Response.STATUS_OK);
+                } catch (Exception e) {
+                    response.setResponse(Response.STATUS_ERROR);
+                    response.setReason(e.getMessage());
+                }
+
+                try {
+                    output.writeUTF(response.toJSON());
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+            catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+
+        try
+        {
+            this.input.close();
+            this.output.close();
+            socket.close();
+
+        } catch(IOException e){
+            e.printStackTrace();
+        }
+    }
+}
+*/
+
+package server;
+
+import com.google.gson.Gson;
+import org.json.simple.JSONArray;
+import server.cli.CommandExecutor;
+import server.cli.commands.DeleteCommand;
+import server.cli.commands.GetCommand;
+import server.cli.commands.SetCommand;
+import server.cli.requests.Request;
+import server.cli.requests.Response;
+import server.exceptions.NoSuchRequestException;
+
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+public class Main {
+
+    private static final String ADDRESS = "127.0.0.1";
+    private static final int PORT = 8000;
+
+    public static void main(String[] args) throws IOException {
+
+        ServerSocket server = new ServerSocket(PORT, 50, InetAddress.getByName(ADDRESS));
+        System.out.println("Server started!");
+        JSONArray datalist = new JSONArray();
+
+        while (!server.isClosed())
+        {
+            Socket s = null;
+
+            try
+            {
+                // socket object to receive incoming client requests
+                s = server.accept();
+
+                // obtaining input and out streams
+                DataInputStream dis = new DataInputStream(s.getInputStream());
+                DataOutputStream dos = new DataOutputStream(s.getOutputStream());
+
+                // create a new thread object
+                Thread t = new ClientHandler(s, dis, dos, datalist, server);
+
+                // Invoking the start() method
+                t.start();
+
+            }
+            catch (Exception e){
+                server.close();
+            }
+        }
+    }
+}
+
+// ClientHandler class
+class ClientHandler extends Thread
+{
+
+    final DataInputStream dis;
+    final DataOutputStream dos;
+    final Socket s;
+    private JSONArray datalist;
+    private ServerSocket server;
+    private boolean flag = false;
+
+    // Constructor
+    public ClientHandler(Socket s, DataInputStream dis, DataOutputStream dos, JSONArray datalist, ServerSocket server)
+    {
+        this.s = s;
+        this.dis = dis;
+        this.dos = dos;
+        this.datalist = datalist;
+        this.server = server;
+    }
+
+    @Override
+    public void run() {
+
+        final CommandExecutor executor = new CommandExecutor();
+        ReadWriteLock lock = new ReentrantReadWriteLock();
+        Lock readLock = lock.readLock();
+        Lock writeLock = lock.writeLock();
+
+        while (!flag)
+        {
+            try {
+                Request request = new Gson().fromJson(dis.readUTF(), Request.class);
+                Response response = new Response();
+
+                try {
+                    switch (request.getType()) {
+                        case "get":
+                            readLock.lock();
+                            GetCommand getCmd = new GetCommand(request.getKey());
+                            executor.executeCommand(getCmd);
+                            response.setValue(getCmd.getResult());
+                            readLock.unlock();
+                            break;
+                        case "set":
+                            writeLock.lock();
+                            SetCommand setCmd = new SetCommand(request.getKey(), request.getValue(), datalist);
+                            executor.executeCommand(setCmd);
+                            writeLock.unlock();
+                            break;
+                        case "delete":
+                            writeLock.lock();
+                            DeleteCommand deleteCmd = new DeleteCommand(request.getKey());
+                            executor.executeCommand(deleteCmd);
+                            writeLock.unlock();
+                            break;
+                        case "exit":
+                            response.setResponse(Response.STATUS_OK);
+                            dos.writeUTF(response.toJSON());
+                            server.close();
+                            return;
+                        default:
+                            throw new NoSuchRequestException();
+                    }
+                    response.setResponse(Response.STATUS_OK);
+                }
+                catch (Exception e) {
+                    response.setResponse(Response.STATUS_ERROR);
+                    response.setReason(e.getMessage());
+                }
+                finally {
+                    dos.writeUTF(response.toJSON());
+                    flag = true;
+                }
+
+            }
+            catch (Exception e) {
+                try {
+                    dis.close();
+                    dos.close();
+                    s.close();
+                } catch (IOException ioException) {
+                    ioException.printStackTrace();
+                }
+
+                e.printStackTrace();
+            }
+        }
     }
 }
