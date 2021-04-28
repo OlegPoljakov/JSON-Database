@@ -4,14 +4,12 @@ import org.json.simple.JSONArray;
 import org.json.simple.JSONObject;
 import org.json.simple.parser.JSONParser;
 import org.json.simple.parser.ParseException;
-import server.database.Database;
 import server.exceptions.NoSuchKeyException;
 
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.util.ArrayList;
 
 public class DeleteCommand implements Command{
 
@@ -26,7 +24,6 @@ public class DeleteCommand implements Command{
 
         JSONArray listofvalues = new JSONArray();
         Integer position = null;
-        boolean elementexeists = false;
 
         //try (FileReader reader = new FileReader("./src/server/data/")){
         try (FileReader reader = new FileReader("D:\\Java\\HyperSkill Projects\\JSON Database\\JSON Database\\task\\src\\server\\data\\db.json")) {

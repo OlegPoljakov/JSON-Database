@@ -2,17 +2,14 @@ package server.cli.requests;
 
 import com.beust.jcommander.Parameter;
 import com.google.gson.Gson;
-import org.json.simple.JSONArray;
-import org.json.simple.JSONObject;
-import org.json.simple.parser.JSONParser;
-import org.json.simple.parser.ParseException;
-import server.exceptions.NoSuchKeyException;
+import com.google.gson.annotations.Expose;
 
 import java.io.*;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 public class Request {
@@ -37,6 +34,8 @@ public class Request {
     @Parameter(names = {"-in", "--commandfromfile"}, description = "The text with commands from file")
     private String commandfromfile;
 
+    public Request() {
+    }
 
     public String getType() {
         return type;
@@ -69,20 +68,6 @@ public class Request {
     public void setCommandfromfile(String commandfromfile) {
         this.commandfromfile = commandfromfile;
     }
-
-    /*
-    public String toJSON() {
-        Map<String, String> map = new LinkedHashMap<>();
-        map.put("type", type);
-        if (key != null) {
-            map.put("key", key);
-        }
-        if (value != null) {
-            map.put("value", value);
-        }
-        return new Gson().toJson(map);
-    }
-    */
 
 
     //Чтение из файла - результат - строка
