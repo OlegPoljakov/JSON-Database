@@ -49,6 +49,7 @@ public class Response {
         if (reason != null) {
             map.put("reason", reason);
         }
-        return new Gson().toJson(map);
+        //return new Gson().toJson(map);
+        return map.toString();
     }
 }

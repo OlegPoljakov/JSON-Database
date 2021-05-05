@@ -1,6 +1,8 @@
 package client;
 
 import com.beust.jcommander.JCommander;
+import com.google.gson.Gson;
+import server.cli.CommandLineArgs;
 import server.cli.requests.Request;
 
 import java.io.DataInputStream;
@@ -19,10 +21,12 @@ public class Main {
 
         System.out.println("Client Started");
 
-        Request request = new Request();
+        CommandLineArgs cla = new CommandLineArgs();
+        JCommander jCommander = new JCommander(cla);
+        jCommander.setProgramName("JSON Database");
 
         JCommander.newBuilder()
-                .addObject(request) //Формируем поля экземпляра request, парсим коммандную строку
+                .addObject(cla)
                 .build()
                 .parse(args);
 
@@ -31,8 +35,9 @@ public class Main {
                 DataInputStream input = new DataInputStream(socket.getInputStream());
                 DataOutputStream output = new DataOutputStream(socket.getOutputStream())
         ) {
-            output.writeUTF(request.toJson()); //Отправка на сервер. Если из файал - содержимое. Иначе -
-            System.out.printf("Sent: %s \n", request.toJson());
+            String request = cla.toJson();
+            output.writeUTF(request);
+            System.out.printf("Sent: %s \n", request);
             System.out.print("Received: " + input.readUTF());
         }
         catch (IOException e) {
